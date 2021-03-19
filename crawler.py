@@ -55,12 +55,16 @@ class Crawler():
         }
         
         search_results = self.db.search_results
-        search_results.insert_one(result)
-        search_results.create_index([
+        try:
+            search_results.insert_one(result)
+            search_results.create_index([
             ('url', pymongo.TEXT),
             ('title', pymongo.TEXT),
             ('description', pymongo.TEXT)
         ], name='search_results', default_language='english')
+        except pymongo.errors.DuplicateKeyError:
+            pass
+        
         
         # store the result
         #self.search_results.append(result)
@@ -76,9 +80,14 @@ class Crawler():
         for link in links:
             # try to crawl links recursively
             try:
+                if 'pdf' in link['href']:
+                    print("this is pdf link handle this amin")
+                    return
                 # use only links starting with 'http'
                 if 'http' in link['href']:
                     self.crawl(link['href'], depth - 1)
+                
+
             
             # ignore internal links
             except KeyError:
@@ -91,4 +100,4 @@ class Crawler():
 
 
 crawler = Crawler()
-crawler.crawl('https://www.thequint.com', 2)
+crawler.crawl('https://www.bbc.co.uk/foi/publication-scheme/accessibility', 2)
