@@ -7,13 +7,15 @@ import json
 import requests
 from bs4 import BeautifulSoup
 import pymongo
+import PyPDF2
+import urllib.request
 
 
 class Crawler():
     # connect to cloud mongo
     connect_uri = 'mongodb+srv://amide:root@e-comm-app-db.p0hwj.mongodb.net/search?retryWrites=true&w=majority'
     client = pymongo.MongoClient(connect_uri)
-    
+
     # create db client
     db = client.search
 
@@ -26,12 +28,12 @@ class Crawler():
         try:
             print('Crawling url: "%s" at depth: %d' % (url, depth))
             response = requests.get(url)
-        
+
         # return otherwise
         except:
             print('Failed to perform HTTP GET request on "%s"\n' % url)
             return
-        
+
         # parse page content
         content = BeautifulSoup(response.text, 'html.parser')
 
@@ -39,36 +41,35 @@ class Crawler():
         try:
             title = content.find('title').text
             description = ''
-            
+
             for tag in content.findAll():
                 if tag.name == 'p':
                     description += tag.text.strip().replace('\n', '')
         # return otherwise
         except:
             return
-        
+
         # store the result structure
         result = {
             'url': url,
             'title': title,
-            'description': description
+            'description': description,
         }
-        
+
         search_results = self.db.search_results
         try:
             search_results.insert_one(result)
             search_results.create_index([
-            ('url', pymongo.TEXT),
-            ('title', pymongo.TEXT),
-            ('description', pymongo.TEXT)
-        ], name='search_results', default_language='english')
+                ('url', pymongo.TEXT),
+                ('title', pymongo.TEXT),
+                ('description', pymongo.TEXT)
+            ], name='search_results', default_language='english')
         except pymongo.errors.DuplicateKeyError:
             pass
-        
-        
+
         # store the result
-        #self.search_results.append(result)
-        
+        # self.search_results.append(result)
+
         # return when depth is exhausted
         if depth == 0:
             return
@@ -82,22 +83,36 @@ class Crawler():
             try:
                 if 'pdf' in link['href']:
                     print("this is pdf link handle this amin")
-                    return
+                    response = urllib.request.urlopen(
+                        "https://nlp.stanford.edu/IR-book/pdf/01bool.pdf")
+                    file = open("test.pdf", 'wb')
+                    file.write(response.read())
+                    pdfFileObj = open('test.pdf', 'rb')
+                    # creating a pdf reader object
+                    pdfReader = PyPDF2.PdfFileReader(pdfFileObj)
+                    # printing number of pages in pdf file
+                    info = pdfReader.getDocumentInfo()
+                    print(info)
+                    result = {
+                        'url': link['href'],
+                        'title': "[PDF]"+info.title,
+                        'description': info.subject + " | " + info.author,
+                    }
+                    search_results.insert_one(result)
+                    continue
                 # use only links starting with 'http'
                 if 'http' in link['href']:
                     self.crawl(link['href'], depth - 1)
-                
 
-            
             # ignore internal links
             except KeyError:
                 pass
             except NameError:
                 pass
-        
+
         # close connection
         client.close()
 
 
 crawler = Crawler()
-crawler.crawl('https://www.bbc.co.uk/foi/publication-scheme/accessibility', 2)
+crawler.crawl('https://web.stanford.edu/class/cs276/', 1)
